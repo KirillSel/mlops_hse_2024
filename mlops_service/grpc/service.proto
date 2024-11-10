@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package mlops;
+
+service ModelService {
+  rpc TrainModel (TrainRequest) returns (TrainResponse);
+  rpc Predict (PredictRequest) returns (PredictResponse);
+  rpc DeleteModel (DeleteRequest) returns (DeleteResponse);
+  rpc ListModels (EmptyRequest) returns (ModelListResponse);
+}
+
+message TrainRequest {
+  string model_type = 1;
+  map<string, string> hyperparameters = 2;
+  int32 num_features = 3;
+}
+
+message TrainResponse {
+  string model_id = 1;
+  string status = 2;
+}
+
+message PredictRequest {
+  string model_id = 1;
+  repeated float data = 2;
+}
+
+message PredictResponse {
+  string model_id = 1;
+  repeated float prediction = 2;
+}
+
+message DeleteRequest {
+  string model_id = 1;
+}
+
+message DeleteResponse {
+  string status = 1;
+  string model_id = 2;
+}
+
+message ModelListResponse {
+  repeated string models = 1;
+}
+
+message EmptyRequest {}

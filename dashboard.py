@@ -4,15 +4,22 @@ import requests
 # Базовый URL для API
 API_URL = "http://127.0.0.1:8000"
 
+
 st.title("MLOps Service Dashboard")
 
 # Проверка статуса сервиса
-st.header("Service Status")
-status_response = requests.get(f"{API_URL}/status")
-if status_response.status_code == 200:
-    st.success(status_response.json().get("status"))
-else:
-    st.error("Service is not running")
+def check_status():
+    try:
+        response = requests.get(f"{API_URL}/status")
+        if response.status_code == 200:
+            return response.json().get("status", "Service is running")
+        else:
+            return "Service is not running"
+    except requests.exceptions.ConnectionError:
+        return "Service is not running"
+
+st.title("Service Status")
+st.write(check_status())
 
 # Обучение новой модели
 st.header("Train Model")
