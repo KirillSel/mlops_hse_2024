@@ -1,16 +1,33 @@
 import logging
-from fastapi import FastAPI, HTTPException, Body
+from fastapi import FastAPI, HTTPException, Depends, Body, status
 from pydantic import BaseModel, Field
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 import joblib
 import os
-from mlops_service.utils.logger import get_logger
+from datetime import datetime, timedelta
+from typing import Optional
+import jwt
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+import bcrypt
 
+# Конфигурация для JWT
+SECRET_KEY = "a3f0b0c3d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+# Эмуляция хранилища пользователей (в реальном приложении используйте базу данных)
+users_db = {}
+
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
 
 app = FastAPI()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 handler = logging.StreamHandler()
 handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
@@ -23,6 +40,12 @@ model_features = {}
 # Убедимся, что папка models существует
 os.makedirs("models", exist_ok=True)
 
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
 # Модель для получения данных и гиперпараметров
 class TrainRequest(BaseModel):
     """Модель для обучения запроса, включает тип модели, гиперпараметры и количество признаков"""
@@ -30,15 +53,82 @@ class TrainRequest(BaseModel):
     hyperparameters: dict
     num_features: int  # Поле для указания количества признаков
 
-    class Config:
-        protected_namespaces = ()
-
 class PredictRequest(BaseModel):
     """Модель данных для запроса предсказания, включает массив данных для предсказания"""
     data: list  # Массив значений для предсказания
 
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+def verify_token(token: str = Depends(oauth2_scheme)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token expired",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+@app.post("/register")
+async def register_user(request: RegisterRequest):
+    if request.username in users_db:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already exists",
+        )
+    
+    # Хэшируем пароль для безопасности
+    hashed_password = bcrypt.hashpw(request.password.encode("utf-8"), bcrypt.gensalt())
+    users_db[request.username] = {"username": request.username, "password": hashed_password}
+    
+    return {"status": "User registered successfully"}
+
+@app.post("/token", response_model=Token)
+async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    user = users_db.get(form_data.username)
+    if user and bcrypt.checkpw(form_data.password.encode("utf-8"), user["password"]):
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": form_data.username}, expires_delta=access_token_expires
+        )
+        return {"access_token": access_token, "token_type": "bearer"}
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+@app.get("/protected-endpoint")
+async def protected_endpoint(token: str = Depends(oauth2_scheme)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username = payload.get("sub")
+        if username is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate credentials")
+    return {"message": f"Hello, {username}"}
+
 @app.get("/list_models")
-async def list_models():
+async def list_models(token: str = Depends(verify_token)):
     """
     Возвращает список всех доступных обученных моделей.
 
@@ -46,11 +136,10 @@ async def list_models():
         dict: Список доступных моделей по идентификаторам.
     """
     logger.info("Listing all trained models")
-    logger.debug(f"Current models: {list(models.keys())}")
     return {"models": list(models.keys())}
 
 @app.get("/status")
-async def status():
+async def check_status(token: str = Depends(verify_token)):
     """
     Проверяет статус сервиса.
 
@@ -61,8 +150,7 @@ async def status():
     return {"status": "Service is running"}
 
 @app.post("/train")
-async def train_model(request: TrainRequest):
-    logger.info(f"Training model of type: {request.model_type} with hyperparameters: {request.hyperparameters}")
+async def train_model(request: TrainRequest, token: str = Depends(verify_token)):
     # Логика выбора модели на основе типа
     if request.model_type == "RandomForest":
         # Удалите параметры, которые не применимы к RandomForest
@@ -85,12 +173,11 @@ async def train_model(request: TrainRequest):
     models[model_id] = model
     model_features[model_id] = request.num_features
     joblib.dump(model, f"models/{model_id}.joblib")
-    logger.info(f"Model {model_id} trained successfully with {request.num_features} features")
+
     return {"model_id": model_id, "status": "Model trained successfully"}
 
-
 @app.post("/predict/{model_id}")
-async def predict(model_id: str, request: PredictRequest = Body(...)):
+async def predict(model_id: str, request: PredictRequest = Body(...), token: str = Depends(verify_token)):
     """
     Выполняет предсказание на основе данных, предоставленных пользователем.
 
@@ -113,12 +200,12 @@ async def predict(model_id: str, request: PredictRequest = Body(...)):
         raise HTTPException(status_code=400, detail=f"Expected {expected_num_features} features, but got {len(request.data)}")
     
     prediction = model.predict([request.data])
-    logger.info(f"Prediction successful for model {model_id} with data: {request.data}")
+    logger.info(f"Prediction successful for model {model_id}")
     
     return {"model_id": model_id, "prediction": prediction.tolist()}
 
 @app.delete("/delete/{model_id}")
-async def delete_model(model_id: str):
+async def delete_model(model_id: str, token: str = Depends(verify_token)):
     """
     Удаляет модель из памяти и файловой системы по идентификатору.
 
@@ -137,7 +224,7 @@ async def delete_model(model_id: str):
     
     if os.path.exists(model_path):
         os.remove(model_path)
-        logger.info(f"Model {model_id} deleted successfully from memory and disk")
+        logger.info(f"Model {model_id} deleted successfully")
     else:
         logger.error(f"Model file {model_path} not found for deletion")
         raise HTTPException(status_code=404, detail="Model file not found")
@@ -145,7 +232,7 @@ async def delete_model(model_id: str):
     return {"status": "Model deleted", "model_id": model_id}
 
 @app.put("/retrain/{model_id}")
-async def retrain_model(model_id: str, request: TrainRequest):
+async def retrain_model(model_id: str, request: TrainRequest, token: str = Depends(verify_token)):
     """
     Переобучает указанную модель с новыми гиперпараметрами и количеством признаков.
 
@@ -160,7 +247,7 @@ async def retrain_model(model_id: str, request: TrainRequest):
         logger.error(f"Model {model_id} not found for retraining")
         raise HTTPException(status_code=404, detail="Model not found")
     
-    logger.info(f"Retraining model {model_id} with new parameters {request.hyperparameters} and {request.num_features} features")
+    logger.info(f"Retraining model {model_id} with new parameters {request.hyperparameters}")
     if request.model_type == "RandomForest":
         model = RandomForestClassifier(**request.hyperparameters)
     elif request.model_type == "LogisticRegression":
@@ -179,7 +266,5 @@ async def retrain_model(model_id: str, request: TrainRequest):
     model_path = f"models/{model_id}.joblib"
     joblib.dump(model, model_path)
     
-    logger.info(f"Model {model_id} retrained and updated with new hyperparameters")
+    logger.info(f"Model {model_id} retrained and updated")
     return {"status": "Model retrained", "model_id": model_id, "num_features": request.num_features}
-
-
