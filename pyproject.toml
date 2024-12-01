@@ -19,6 +19,7 @@ streamlit = "^1.39.0"
 grpcio-tools = "^1.67.1"
 pyjwt = "^2.9.0"
 bcrypt = "^4.2.0"
+minio = "^7.2.12"
 
 
 [build-system]

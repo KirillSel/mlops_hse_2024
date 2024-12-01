@@ -1,5 +1,5 @@
 import logging
-from fastapi import FastAPI, HTTPException, Depends, Body, status
+from fastapi import FastAPI, HTTPException, Depends, Body, status, UploadFile, File
 from pydantic import BaseModel, Field
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
@@ -10,6 +10,8 @@ from typing import Optional
 import jwt
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 import bcrypt
+from mlops_service.utils.s3_client import upload_file_to_s3, download_file_from_s3
+
 
 # Конфигурация для JWT
 SECRET_KEY = "a3f0b0c3d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2"
@@ -268,3 +270,36 @@ async def retrain_model(model_id: str, request: TrainRequest, token: str = Depen
     
     logger.info(f"Model {model_id} retrained and updated")
     return {"status": "Model retrained", "model_id": model_id, "num_features": request.num_features}
+
+@app.post("/upload")
+async def upload_to_s3(file: UploadFile = File(...)):
+    """
+    Загружает файл в S3.
+
+    Args:
+        file (UploadFile): Файл для загрузки.
+
+    Returns:
+        dict: URL загруженного файла.
+    """
+    file_path = f"/tmp/{file.filename}"
+    with open(file_path, "wb") as f:
+        f.write(file.file.read())
+
+    s3_url = upload_file_to_s3(file_path, file.filename)
+    return {"s3_url": s3_url}
+
+@app.get("/download/{file_name}")
+async def download_from_s3(file_name: str):
+    """
+    Скачивает файл из S3.
+
+    Args:
+        file_name (str): Имя файла для скачивания.
+
+    Returns:
+        dict: Локальный путь к скачанному файлу.
+    """
+    file_path = f"/tmp/{file_name}"
+    download_file_from_s3(file_name, file_path)
+    return {"local_file_path": file_path}
