@@ -1,3 +1,19 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# OS files
+.DS_Store
+
+# DVC cache and temporary files
+.dvc/cache/
+.dvc/tmp/
+
+# Local data and models
+models/
+downloaded_dataset.csv
+test_file.txt.dvc
+
 /test.csv
 /test_file.txt
 /dataset.csv
