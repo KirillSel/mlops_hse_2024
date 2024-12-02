@@ -12,5 +12,6 @@ __pycache__/
 # Local data and models
 models/
 downloaded_dataset.csv
-test_file.txt.dvc
 
+
+/dataset.csv
