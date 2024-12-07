@@ -1,17 +1,67 @@
-# Python cache
+# Byte-compiled / optimized / DLL files
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
 
-# OS files
-.DS_Store
+# C extensions
+*.so
 
-# DVC cache and temporary files
-.dvc/cache/
-.dvc/tmp/
+# Distribution / packaging
+.Python
+env/
+venv/
+ENV/
+*.egg
+*.egg-info/
+dist/
+build/
+*.dist-info/
 
-# Local data and models
-models/
-downloaded_dataset.csv
+# PyInstaller
+*.manifest
+*.spec
 
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
 
-/dataset.csv
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.cache
+coverage.xml
+*.cover
+.hypothesis/
+*.mocha
+.junit.xml
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+
+# Docker
+*.log
+docker-compose.override.yml
+docker-compose.override.yaml
+
+# MLflow artifacts and SQLite database
+mlflow_artifacts/
+mlflow.db
+
+# MinIO data
+minio-data/
+
+# Ignore any temporary or intermediate files
+*.tmp
+*.temp
+*.bak
+*.swp
+
+# Ignore zip archives or other temporary exports
+*.zip
