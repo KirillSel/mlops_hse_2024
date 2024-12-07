@@ -20,53 +20,44 @@
 
 - Python 3.11
 - Poetry для управления зависимостями
----------------------------------------------
-## Установка
-1. Клонируйте репозиторий:  
 
+1. Клонируйте репозиторий:  
     ```bash   
     git clone <URL>  
     cd mlops_project  
 
 2. Запустите сервер FastAPI:  
-
     ```bash    
     poetry run uvicorn mlops_service.main:app --reload  
 
 3. В отдельном терминале запустите дашборд Streamlit:  
-
     ```bash     
     poetry run streamlit run dashboard.py  
 
-
 Дашборд будет доступен по адресу: http://localhost:8501
---------------------------------
 
  ## Аутентификация и регистрация пользователей
  ### Регистрация нового пользователя
-
 Чтобы начать работу с защищёнными эндпоинтами API, сначала зарегистрируйте нового пользователя. Это можно сделать, отправив POST-запрос на эндпоинт /register с данными пользователя.
 
 Пример команды для регистрации пользователя:  
-
     ```bash  
     curl -X POST "http://127.0.0.1:8000/register" -H "Content-Type: application/json" -d '{"username": "ВашеИмяПользователя", "password": "ВашПароль"}'
 
 После успешной регистрации вы получите сообщение:  
-    ```json  
+    ```json    
     {"status":"User registered successfully"}
 
 ### Получение токена
 После регистрации получите токен для доступа к защищённым эндпоинтам. Отправьте POST-запрос на эндпоинт /token, указав имя пользователя и пароль, которые вы использовали при регистрации.
 
 Пример команды для получения токена:  
-
     ```bash  
     curl -X POST "http://127.0.0.1:8000/token" -H "Content-Type: application/x-www-form-urlencoded" -d "username=ВашеИмяПользователя&password=ВашПароль"
 
 После успешной аутентификации вы получите ответ с токеном:  
 
-    ```json    
+    ```json  
     {  
     "access_token": "ваш_токен",  
     "token_type": "bearer"  
@@ -76,84 +67,125 @@
 Для доступа к защищённым эндпоинтам, таких как /status, /train, /predict, и другим, добавьте токен в заголовок Authorization с использованием схемы Bearer.
 
 Пример запроса к эндпоинту /status с токеном:  
-
-    ```bash     
-    curl -X GET "http://127.0.0.1:8000/status" -H "Authorization: Bearer ваш_токен"
+    ```bash  
+    curl -X GET "http://127.0.0.1:8000/status" -H "Authorization: Bearer ваш_токен"  
 
 Пример запроса для получения списка моделей (/list_models) с токеном:  
-    ```bash  
-    curl -X GET "http://127.0.0.1:8000/list_models" -H "Authorization: Bearer ваш_токен"    
 
+    ```bash  
+    curl -X GET "http://127.0.0.1:8000/list_models" -H "Authorization: Bearer ваш_токен"  
 
 Замените ваш_токен на токен, полученный на предыдущем шаге.
 
 ### Примечания
+1. Срок действия токена: Токен имеет ограниченный срок действия (по умолчанию 30 минут). После его истечения получите новый токен, повторив шаги получения токена.
+. Безопасность: Никогда не передавайте токен и пароль в открытых источниках или на общедоступных платформах.
 
-1. Срок действия токена: Токен имеет ограниченный срок действия (по умолчанию 30 минут). После его истечения получите новый токен, повторив шаги получения токена.  
-2. Безопасность: Никогда не передавайте токен и пароль в открытых источниках или на общедоступных платформах.
--------------------------------------------------------
-## gRPC сервис
-### Запуск gRPC сервера:
-Запустите gRPC сервер для обработки запросов gRPC.  
 
-    ```bash     
-    PYTHONPATH=$(pwd) poetry run python mlops_service/grpc/server.py
+# Запуск Docker-сервисов
+Для работы микросервиса с использованием Docker выполните следующие шаги:
 
+1. Запустите minio и mlops_service
+Для этого используйте файл docker-compose.yml. Выполните команду:
+
+    ```bash 
+    docker compose up --build
+
+После успешного запуска сервисы будут доступны:
+
+minio: http://localhost:9000 (веб-интерфейс: http://localhost:9001)
+mlops_service: http://localhost:8000
+
+2. Запустите mlflow
+Используйте файл docker-compose-mlflow.yml. Выполните команду:
+
+    ```bash 
+    docker compose -f docker-compose-mlflow.yml up --build
+
+После успешного запуска mlflow будет доступен по адресу:
+
+mlflow: http://localhost:5000
+
+3. Проверка взаимодействия между сервисами
+Чтобы убедиться, что сервисы работают и связаны между собой, выполните тестовый запрос к mlops_service для проверки взаимодействия с mlflow:
+
+    ```bash 
+    curl -X GET http://localhost:8000/test_mlflow
+
+При успешной настройке вы получите ответ:
+
+    ```json
+    {
+    "status": "success",
+    "message": "Test data logged to MLflow"
+    }
+    
+Теперь все сервисы готовы к использованию.
+
+## Установка
+
+1. Клонируйте репозиторий:  
+    ```bash  
+    git clone <URL>  
+    cd mlops_project  
+
+2. Запустите сервер FastAPI:  
+    ```bash 
+    poetry run uvicorn mlops_service.main:app --reload
+
+3. В отдельном терминале запустите дашборд Streamlit:  
+    ```bash  
+    poetry run streamlit run dashboard.py
+
+Дашборд будет доступен по адресу: http://localhost:8501
+
+## Запуск gRPC сервера:
+    ```bash   
+    PYTHONPATH=$(pwd) poetry run python mlops_service/grpc/server.py  
 
 gRPC сервер будет запущен на порту 50051.
 
-### Пример запуска gRPC клиента:  
+## Пример запуска gRPC клиента:  
 В отдельном терминале запустите gRPC клиент для проверки функционала.  
 
-    ```bash    
-    PYTHONPATH=$(pwd) poetry run python mlops_service/client_grpc.py```
-
-Этот скрипт выполнит несколько тестовых вызовов к gRPC сервису, включая тренировку модели, предсказание, удаление модели и получение списка моделей. Вы увидите вывод с результатами каждого из этих действий.
-
-------------------------
+    ```bash  
+    PYTHONPATH=$(pwd) poetry run python mlops_service/client_grpc.py
 
 ## Примеры запросов
 
 ### Проверка статуса:  
-
-    ```bash      
-    curl -X GET "http://127.0.0.1:8000/status" -H "Authorization: Bearer ваш_токен"
-
+    ```bash    
+    curl -X GET "http://127.0.0.1:8000/status" -H "Authorization: Bearer ваш_токен"  
 
 ### Обучение новой модели:  
-
-    ```bash    
+    ```bash  
     curl -X POST "http://127.0.0.1:8000/train" -H "Authorization: Bearer ваш_токен" -H "Content-Type: application/json" -d '{  
     "model_type": "RandomForest",  
     "hyperparameters": {"n_estimators": 10, "max_depth": 5},  
     "num_features": 8  
-    }'
+    }'  
 
 ### Предсказание:  
-
-    ```bash    
+    ```bash  
     curl -X POST "http://127.0.0.1:8000/predict/RandomForest_1" -H "Authorization: Bearer ваш_токен" -H "Content-Type: application/json" -d '{  
     "data": [1, 0, 1, 1, 0, 0, 1, 1]
-    }'
+    }'  
 
 ### Удаление модели:  
-
-    ```bash    
-    curl -X DELETE "http://127.0.0.1:8000/delete/RandomForest_1" -H "Authorization: Bearer ваш_токен"
-
+    ```bash   
+    curl -X DELETE "http://127.0.0.1:8000/delete/RandomForest_1" -H "Authorization: Bearer ваш_токен"  
 
 ### Список доступных моделей:  
-
     ```bash   
     curl -X GET "http://127.0.0.1:8000/list_models" -H "Authorization: Bearer ваш_токен"  
 
 ### Автоматически сгенерированная документация доступна по следующим адресам:  
 Swagger: http://127.0.0.1:8000/docs  
-ReDoc: http://127.0.0.1:8000/redoc  
+ReDoc: http://127.0.0.1:8000/redoc
 
 ## Логирование
-Логирование всех основных операций доступно в терминале, где запущен FastAPI сервер. Логи также доступны для gRPC сервиса, что позволяет отслеживать выполнение ключевых операций.  
+Логирование всех основных операций доступно в терминале, где запущен FastAPI сервер. Логи также доступны для gRPC сервиса, что позволяет отслеживать выполнение ключевых операций.
 
 ## Примечание
-* Для gRPC: приложен скрипт client_grpc.py, который позволяет протестировать работу gRPC сервиса. Инструкция по запуску находится в разделе gRPC Сервис.  
+* Для gRPC: приложен скрипт client_grpc.py, который позволяет протестировать работу gRPC сервиса. Инструкция по запуску находится в разделе gRPC Сервис.
 * gRPC и HTTP API: могут работать параллельно, обеспечивая несколько способов взаимодействия с сервисом.
